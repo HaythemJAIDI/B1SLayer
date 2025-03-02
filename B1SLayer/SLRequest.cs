@@ -89,6 +89,34 @@ public class SLRequest
     }
 
     /// <summary>
+    /// Performs a GET request with the provided parameters and returns the result in a value tuple containing the result as a string and the count of matching resources.
+    /// </summary>
+    /// <param name="unwrapCollection">
+    /// Whether the result should be unwrapped from the 'value' JSON array in case it is a collection.
+    /// </param>
+    public async Task<(string Result, int Count)> GetWithInlineCountAndStringAsync(bool unwrapCollection = true)
+    {
+        return await _slConnection.ExecuteRequest(async () =>
+        {
+            string stringResult = await FlurlRequest
+                .SetQueryParam("$inlinecount", "allpages")
+                .WithCookies(await _slConnection.GetSessionCookiesAsync())
+                .GetStringAsync();
+            using var jsonDoc = JsonDocument.Parse(stringResult);
+
+            int inlineCount =
+                jsonDoc.RootElement.TryGetProperty("odata.count", out JsonElement inlineCountElement1) ? inlineCountElement1.GetInt32() :
+                jsonDoc.RootElement.TryGetProperty("@odata.count", out JsonElement inlineCountElement2) ? inlineCountElement2.GetInt32() : 0;
+
+            string jsonToDeserialize =
+                unwrapCollection && jsonDoc.RootElement.TryGetProperty("value", out JsonElement valueCollection) ? valueCollection.GetRawText() :
+                jsonDoc.RootElement.GetRawText();
+
+            return (jsonToDeserialize, inlineCount);
+        });
+    }
+
+    /// <summary>
     /// Performs multiple GET requests until all entities in a collection are obtained. The result will always be unwrapped from the 'value' array.
     /// </summary>
     /// <remarks>
